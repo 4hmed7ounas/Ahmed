@@ -1,0 +1,1202 @@
+[org 0x0100]
+jmp start
+
+time: dw 'Time:', 0
+First: dw 'You got 100 points', 0
+Last: dw 'You got 50 points', 0
+oldisr: dd 0
+tickcount: dw 0
+savedtime: dw 0
+isrunning: db 1
+score: dw 0 
+
+                    ;calculating length
+strlen: 
+push bp
+mov bp,sp
+push es
+push cx
+push di
+les di, [bp+4]
+mov cx, 0xffff
+xor al, al
+repne scasb
+mov ax, 0xffff
+sub ax, cx
+dec ax
+pop di
+pop cx
+pop es
+pop bp
+ret 4
+
+                     ; printing string
+printstr:
+push bp
+mov bp, sp
+push es
+push ax
+push cx
+push si
+push di
+push ds
+mov ax, [bp+4]
+push ax
+call strlen
+cmp ax, 0
+jz exit1
+mov cx, ax
+mov ax, 0xb800
+mov es, ax
+mov al, 80
+mul byte [bp+8]
+add ax, [bp+10]
+shl ax, 1
+mov di, ax
+mov si, [bp+4]
+mov ah, [bp+6]
+cld
+nextchar: 
+lodsb
+stosw
+loop nextchar
+exit1:
+pop di
+pop si
+pop cx
+pop ax
+pop es
+pop bp
+ret 8
+
+                               ;end the program
+endProgram:
+cli
+mov byte [isrunning], 0
+mov dx, 0x7020
+call AddBG
+mov ax, 35
+push ax
+mov ax, 12
+push ax
+mov ax, 0x70
+push ax
+mov ax, time
+push ax
+call printstr
+mov ax, 2000
+push ax
+push word [tickcount]
+call printnum
+jmp terminate
+
+
+
+AddBG:
+mov ax, 0xb800
+mov es, ax
+mov di, 0
+next:
+mov word[es:di], dx
+add di, 2
+cmp di,4000
+jne next
+ret
+                            ;movement for bee
+movement:
+push ax
+push bx
+push es
+push di
+mov ax, 0xb800
+mov es, ax
+in al, 0x60
+mov cx, 0
+backto:
+cmp al, 0x4D
+je Right
+cmp al, 0x4B
+je Left
+cmp al, 0x48
+je Up
+cmp al, 0x50
+je Down
+jmp exit
+
+Right:
+mov di, si
+add di,2
+mov al, byte [es:di]
+cmp al, 0x00
+je backto
+cmp al, 0x21
+je backto
+cmp al, 0x69
+je backto
+cmp al, 0x30
+je endProgram
+mov al, ' '
+mov [es:si], al
+mov al, '@'
+mov [es:di], al
+mov si, di
+jmp nextMove
+Left:
+mov di, si
+sub di,2
+mov al, byte [es:di]
+cmp al, 0x00
+je backto
+cmp al, 0x21
+je backto
+cmp al, 0x69
+je backto
+cmp al, 0x30
+je endProgram
+mov al, ' '
+mov [es:si], al
+mov al, '@'
+mov [es:di], al
+mov si, di 
+jmp nextMove
+Up:
+mov di, si
+sub di, 160
+mov al, byte [es:di]
+cmp al, 0x00
+je backto
+cmp al, 0x21
+je backto
+cmp al, 0x69
+je backto
+cmp al, 0x30
+je endProgram
+mov al, ' '
+mov [es:si], al
+mov al, '@'
+mov [es:di], al
+mov si, di
+jmp nextMove
+Down:
+mov di, si
+add di, 160
+mov al, byte [es:di]
+cmp al, 0x00
+je backto
+cmp al, 0x21
+je backto
+cmp al, 0x69
+je backto
+cmp al, 0x30
+je endProgram
+mov al, ' '
+mov [es:si], al
+mov al, '@'
+mov [es:di], al
+mov si, di
+jmp nextMove
+nextMove:
+pop di
+pop es
+pop bx
+pop ax
+jmp far [cs:oldisr]
+exit:
+mov al, 0x20
+out 0x20, al
+pop di
+pop es
+pop bx
+pop ax
+iret
+
+                               ; Timer interrupt service routine
+timer:
+push ax
+cmp byte [isrunning], 1
+jne skipUpdate
+inc word [cs:tickcount]
+skipUpdate:
+mov ax, [cs:tickcount]
+push ax
+call printnum1
+mov al, 0x20
+out 0x20, al
+pop ax
+iret
+
+                     ;for adding rows (horizontal)
+addrow:
+push bp
+mov bp, sp
+push ax
+push es
+push cx
+push di
+push si
+mov ax, 0xb800
+mov es, ax
+mov al, 80
+mul byte[bp + 8]
+add ax, [bp + 10]
+shl ax, 1
+mov di, ax
+mov al, 80
+mul byte[bp + 4]
+add ax, [bp + 6]
+shl ax, 1
+mov si, ax
+next1:
+mov word[es:di], dx
+add di, 2
+cmp di, si
+jne next1
+pop si
+pop di
+pop cx
+pop es
+pop ax
+pop bp
+ret 8
+
+                      ;for adding colums (vertical)
+addcol:
+push bp
+mov bp, sp
+push ax
+push es
+push cx
+push di
+push si
+mov ax, 0xb800
+mov es, ax
+mov al, 80
+mul byte[bp + 8]
+add ax, [bp + 10]
+shl ax, 1
+mov di, ax
+mov al, 80
+mul byte[bp + 4]
+add ax, [bp + 6]
+shl ax, 1
+mov si, ax
+next2:
+mov word[es:di], dx
+add di, 160
+cmp di, si
+jne next2
+pop si
+pop di
+pop cx
+pop es
+pop ax
+pop bp
+ret 8
+
+                                 ;printing time (sec) and score
+printnum:
+push bp
+mov bp, sp
+push es
+push ax
+push bx
+push cx
+push dx
+push di
+mov ax, 0xb800
+mov es, ax
+mov ax, [bp+4]
+mov bx, 10
+mov cx, 0
+nextdigit:
+mov dx, 0
+div bx
+add dl, 0x30
+push dx
+inc cx
+cmp ax, 0
+jnz nextdigit
+mov di, [bp + 6]
+nextpos:
+pop dx
+mov dh, 0x70
+mov [es:di], dx
+add di, 2
+loop nextpos
+pop di
+pop dx
+pop cx
+pop bx
+pop ax
+pop es
+pop bp
+ret 2
+printnum1:
+push bp
+mov bp, sp
+push es
+push ax
+push bx
+push cx
+push dx
+push di
+mov ax, 0xb800
+mov es, ax
+mov ax, [bp+4]
+mov bx, 10
+mov cx, 0
+nextdigit1:
+mov dx, 0
+div bx
+add dl, 0x30
+push dx
+inc cx
+cmp ax, 0
+jnz nextdigit1
+mov di, 76
+nextpos1:
+pop dx
+mov dh, 0x70
+mov [es:di], dx
+add di, 2
+loop nextpos1
+pop di
+pop dx
+pop cx
+pop bx
+pop ax
+pop es
+pop bp
+ret 2
+
+
+start:
+             ;setting color for background
+mov dx, 0x7020
+
+             ;adding background
+call AddBG
+
+             ;setting color for lines
+mov dx, 0x5500
+
+                 ;adding inner lines
+                     ;2
+mov ax, 68
+push ax
+mov ax, 2
+push ax
+mov ax, 70 
+push ax
+mov ax, 2
+push ax
+call addrow
+                      ;3
+mov ax, 4
+push ax
+mov ax, 3
+push ax
+mov ax, 66
+push ax
+mov ax, 3
+push ax
+call addrow
+mov ax, 68
+push ax
+mov ax, 3
+push ax
+mov ax, 70
+push ax
+mov ax, 3
+push ax
+call addrow
+                    ;4
+mov ax, 32
+push ax
+mov ax, 4
+push ax
+mov ax, 34
+push ax
+mov ax, 4
+push ax
+call addrow
+mov ax, 68
+push ax
+mov ax, 4
+push ax
+mov ax, 70 
+push ax
+mov ax, 4
+push ax
+call addrow
+                   ;5
+mov ax, 0
+push ax
+mov ax, 5
+push ax
+mov ax, 30 
+push ax
+mov ax, 5
+push ax
+call addrow
+mov ax, 32
+push ax
+mov ax, 5
+push ax
+mov ax, 70 
+push ax
+mov ax, 5
+push ax
+call addrow
+                  ;6
+mov ax, 20
+push ax
+mov ax, 6
+push ax
+mov ax, 22
+push ax
+mov ax, 6
+push ax
+call addrow
+mov ax, 28
+push ax
+mov ax, 6
+push ax
+mov ax, 30
+push ax
+mov ax, 6
+push ax
+call addrow
+                    ;7
+mov ax, 0
+push ax
+mov ax, 7
+push ax
+mov ax, 18
+push ax
+mov ax, 7
+push ax
+call addrow
+mov ax, 20
+push ax
+mov ax, 7
+push ax
+mov ax, 26 
+push ax
+mov ax, 7
+push ax
+call addrow
+mov ax, 28
+push ax
+mov ax, 7
+push ax
+mov ax, 62
+push ax
+mov ax, 7
+push ax
+call addrow
+mov ax, 64
+push ax
+mov ax, 7
+push ax
+mov ax, 70 
+push ax
+mov ax, 7
+push ax
+call addrow
+                 ;8
+mov ax, 64
+push ax
+mov ax, 8
+push ax
+mov ax, 66
+push ax
+mov ax, 8
+push ax
+call addrow
+mov ax, 68
+push ax
+mov ax, 8
+push ax
+mov ax, 70
+push ax
+mov ax, 8
+push ax
+call addrow
+                 ;9
+mov ax, 0
+push ax
+mov ax, 9
+push ax
+mov ax, 6 
+push ax
+mov ax, 9
+push ax
+call addrow
+mov ax, 8
+push ax
+mov ax, 9
+push ax
+mov ax, 62
+push ax
+mov ax, 9
+push ax
+call addrow
+mov ax, 64
+push ax
+mov ax, 9
+push ax
+mov ax, 66
+push ax
+mov ax, 9
+push ax
+call addrow
+mov ax, 68
+push ax
+mov ax, 9
+push ax
+mov ax, 80 
+push ax
+mov ax, 9
+push ax
+call addrow
+                 ;10
+mov ax, 16
+push ax
+mov ax, 10
+push ax
+mov ax, 18
+push ax
+mov ax, 10
+push ax
+call addrow
+mov ax, 64
+push ax
+mov ax, 10
+push ax
+mov ax, 66
+push ax
+mov ax, 10
+push ax
+call addrow
+                 ;11
+mov ax, 0
+push ax
+mov ax, 11
+push ax
+mov ax, 18
+push ax
+mov ax, 11
+push ax
+call addrow
+mov ax, 20
+push ax
+mov ax, 11
+push ax
+mov ax, 46
+push ax
+mov ax, 11
+push ax
+call addrow
+mov ax, 48
+push ax
+mov ax, 11
+push ax
+mov ax, 60 
+push ax
+mov ax, 11
+push ax
+call addrow
+mov ax, 62
+push ax
+mov ax, 11
+push ax
+mov ax, 66
+push ax
+mov ax, 11
+push ax
+call addrow
+mov ax, 68
+push ax
+mov ax, 11
+push ax
+mov ax, 80
+push ax
+mov ax, 11
+push ax
+call addrow
+                 ;12
+mov ax, 22
+push ax
+mov ax, 12
+push ax
+mov ax, 24
+push ax
+mov ax, 12
+push ax
+call addrow
+mov ax, 48
+push ax
+mov ax, 12
+push ax
+mov ax, 50
+push ax
+mov ax, 12
+push ax
+call addrow
+                 ;13
+mov ax, 0
+push ax
+mov ax, 13
+push ax
+mov ax, 6 
+push ax
+mov ax, 13
+push ax
+call addrow
+mov ax, 8
+push ax
+mov ax, 13
+push ax
+mov ax, 20
+push ax
+mov ax, 13
+push ax
+call addrow
+mov ax, 22
+push ax
+mov ax, 13
+push ax
+mov ax, 24 
+push ax
+mov ax, 13
+push ax
+call addrow
+mov ax, 26
+push ax
+mov ax, 13
+push ax
+mov ax, 76
+push ax
+mov ax, 13
+push ax
+call addrow
+                 ;14
+mov ax, 14
+push ax
+mov ax, 14
+push ax
+mov ax, 16
+push ax
+mov ax, 14
+push ax
+call addrow
+mov ax, 22
+push ax
+mov ax, 14
+push ax
+mov ax, 24
+push ax
+mov ax, 14
+push ax
+call addrow
+mov ax, 54
+push ax
+mov ax, 14
+push ax
+mov ax, 56
+push ax
+mov ax, 14
+push ax
+call addrow
+                 ;15
+mov ax, 0
+push ax
+mov ax, 15
+push ax
+mov ax, 12
+push ax
+mov ax, 15
+push ax
+call addrow
+mov ax, 14
+push ax
+mov ax, 15
+push ax
+mov ax, 76
+push ax
+mov ax, 15
+push ax
+call addrow
+                  ;16
+mov ax, 50
+push ax
+mov ax, 16
+push ax
+mov ax, 52
+push ax
+mov ax, 16
+push ax
+call addrow
+mov ax, 74
+push ax
+mov ax, 16
+push ax
+mov ax, 76
+push ax
+mov ax, 16
+push ax
+call addrow
+                  ;17
+mov ax, 0
+push ax
+mov ax, 17
+push ax
+mov ax, 44
+push ax
+mov ax, 17
+push ax
+call addrow
+mov ax, 46
+push ax
+mov ax, 17
+push ax
+mov ax, 66
+push ax
+mov ax, 17
+push ax
+call addrow
+mov ax, 68
+push ax
+mov ax, 17
+push ax
+mov ax, 76
+push ax
+mov ax, 17
+push ax
+call addrow
+                  ;18
+mov ax, 10
+push ax
+mov ax, 18
+push ax
+mov ax, 12
+push ax
+mov ax, 18
+push ax
+call addrow
+mov ax, 42
+push ax
+mov ax, 18
+push ax
+mov ax, 44
+push ax
+mov ax, 18
+push ax
+call addrow
+mov ax, 68
+push ax
+mov ax, 18
+push ax
+mov ax, 70
+push ax
+mov ax, 18
+push ax
+call addrow
+                  ;19
+mov ax, 10
+push ax
+mov ax, 19
+push ax
+mov ax, 58
+push ax
+mov ax, 19
+push ax
+call addrow
+mov ax, 60
+push ax
+mov ax, 19
+push ax
+mov ax, 66
+push ax
+mov ax, 19
+push ax
+call addrow
+mov ax, 68
+push ax
+mov ax, 19
+push ax
+mov ax, 80 
+push ax
+mov ax, 19
+push ax
+call addrow
+                  ;20
+mov ax, 52
+push ax
+mov ax, 20
+push ax
+mov ax, 54
+push ax
+mov ax, 20
+push ax
+call addrow
+mov ax, 60
+push ax
+mov ax, 20
+push ax
+mov ax, 62
+push ax
+mov ax, 20
+push ax
+call addrow
+                  ;21
+mov ax, 10
+push ax
+mov ax, 21
+push ax
+mov ax, 50
+push ax
+mov ax, 21
+push ax
+call addrow
+mov ax, 52
+push ax
+mov ax, 21
+push ax
+mov ax, 54
+push ax
+mov ax, 21
+push ax
+call addrow
+mov ax, 56
+push ax
+mov ax, 21
+push ax
+mov ax, 80
+push ax
+mov ax, 21
+push ax
+call addrow
+                  ;22
+mov ax, 10
+push ax
+mov ax, 22
+push ax
+mov ax, 12
+push ax
+mov ax, 22
+push ax
+call addrow
+             
+             ;setting color for border
+mov dx, 0x5500
+
+             ;adding border
+mov ax, 0
+push ax
+mov ax, 1
+push ax
+mov ax, 80 
+push ax
+mov ax, 1
+push ax
+call addrow
+mov ax, 0
+push ax
+mov ax, 1
+push ax
+mov ax, 0 
+push ax
+mov ax, 23
+push ax
+call addcol
+mov ax, 1
+push ax
+mov ax, 1
+push ax
+mov ax, 1 
+push ax
+mov ax, 23
+push ax
+call addcol
+mov ax, 0
+push ax
+mov ax, 23
+push ax
+mov ax, 80
+push ax
+mov ax, 23
+push ax
+call addrow
+mov ax, 79
+push ax
+mov ax, 1
+push ax
+mov ax, 79
+push ax
+mov ax, 23
+push ax
+call addcol
+mov ax, 78
+push ax
+mov ax, 1
+push ax
+mov ax, 78
+push ax
+mov ax, 23
+push ax
+call addcol
+                    ;adding honeycomb
+mov dx, 0x6030
+mov ax, 73
+push ax
+mov ax, 3
+push ax
+mov ax, 75
+push ax
+mov ax, 3
+push ax
+call addrow
+mov ax, 72
+push ax
+mov ax, 4
+push ax
+mov ax, 76
+push ax
+mov ax, 4
+push ax
+call addrow
+mov ax, 71
+push ax
+mov ax, 5
+push ax
+mov ax, 77
+push ax
+mov ax, 5
+push ax
+call addrow
+mov ax, 72
+push ax
+mov ax, 6
+push ax
+mov ax, 76
+push ax
+mov ax, 6
+push ax
+call addrow
+mov ax, 73
+push ax
+mov ax, 7
+push ax
+mov ax, 75
+push ax
+mov ax, 7
+push ax
+call addrow
+
+                   ; adding honey Bee
+mov dx, 0x7069
+mov ax, 4
+push ax
+mov ax, 18
+push ax
+mov ax, 5
+push ax
+mov ax, 18
+push ax
+call addrow
+mov ax, 7
+push ax
+mov ax, 18
+push ax
+mov ax, 8
+push ax
+mov ax, 18
+push ax
+call addrow
+mov dx, 0x6000
+mov ax, 3
+push ax
+mov ax, 19
+push ax
+mov ax, 4
+push ax
+mov ax, 19
+push ax
+call addrow
+mov dx, 0x6030
+mov ax, 4
+push ax
+mov ax, 19
+push ax
+mov ax, 5
+push ax
+mov ax, 19
+push ax
+call addrow
+mov dx, 0x6000
+mov ax, 5
+push ax
+mov ax, 19
+push ax
+mov ax, 7
+push ax
+mov ax, 19
+push ax
+call addrow
+mov dx, 0x6030
+mov ax, 7
+push ax
+mov ax, 19
+push ax
+mov ax, 8
+push ax
+mov ax, 19
+push ax
+call addrow
+mov dx, 0x6000
+mov ax, 8
+push ax
+mov ax, 19
+push ax
+mov ax, 9
+push ax
+mov ax, 19
+push ax
+call addrow
+mov dx, 0x0000
+mov ax, 3
+push ax
+mov ax, 20
+push ax
+mov ax, 9
+push ax
+mov ax, 20
+push ax
+call addrow
+mov dx, 0x6600
+mov ax, 3
+push ax
+mov ax, 21
+push ax
+mov ax, 9
+push ax
+mov ax, 21
+push ax
+call addrow
+mov dx, 0x7021
+mov ax, 4
+push ax
+mov ax, 22
+push ax
+mov ax, 5
+push ax
+mov ax, 22
+push ax
+call addrow
+mov ax, 7
+push ax
+mov ax, 22
+push ax
+mov ax, 8
+push ax
+mov ax, 22
+push ax
+call addrow
+
+                   ;adding arrows
+mov dx, 0x703E
+mov ax, 66
+push ax
+mov ax, 6
+push ax
+mov ax, 70
+push ax
+mov ax, 6
+push ax
+call addrow
+mov ax, 10
+push ax
+mov ax, 20
+push ax
+mov ax, 14
+push ax
+mov ax, 20
+push ax
+call addrow
+                     ;movement code
+mov ax, 0
+mov es, ax
+mov ax, [es: 9 * 4]
+mov [oldisr], ax
+mov ax, [es: 9 * 4 + 2]
+mov [oldisr + 2], ax
+                       ;code for timer
+mov word [es: 8 * 4], timer
+mov [es: 8 * 4 + 2], cs
+
+cli
+mov word [es: 9 * 4], movement
+mov [es: 9 * 4 + 2], cs
+sti
+
+                       ;starting location for bee
+mov ax, 20
+mov bx, 80
+mul bx
+add ax, 10
+shl ax, 1
+mov si, ax
+mov ah, 0x00
+mov al, 0x20
+mov [es:si], al   
+
+                       ; caculating score
+calculatingScore:
+add cx, 2
+mov [score], cx
+jmp calculatingScore
+
+
+                        ; termination
+terminate:
+cmp word [tickcount], 350
+jle firstPos
+cmp word [tickcount], 350
+jg lastPos
+                        ;setting points
+firstPos:
+mov ax, 35
+push ax
+mov ax, 13
+push ax
+mov ax, 0x70
+push ax
+mov ax, First
+push ax
+call printstr
+jmp end
+
+lastPos:
+mov ax, 35
+push ax
+mov ax, 13
+push ax
+mov ax, 0x70
+push ax
+mov ax, Last
+push ax
+call printstr
+jmp end
+
+end:
+mov ax, [oldisr]
+mov bx, [oldisr+2]
+cli
+mov [es:9*4], ax
+mov [es:9*4+2], bx
+sti
+
+mov ax, 0x4c00
+int 0x21

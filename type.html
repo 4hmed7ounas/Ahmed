@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        .heading {
+            display: flex;
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <h1 id="heading">Welcome</h1>
+
+    <script>
+        let title = document.getElementById('heading');
+        let name = ["CS Junior", "Freelancer", "Web Developer", "Robotic Scientist", "Circuit Designer"];
+        let index = 0;
+        let x = 0;
+
+        const typeWriter = (n) => {
+            let new_title = n[x].slice(0, index);
+            title.innerText = new_title;
+            if (index > n[x].length) {
+                index = 1
+                x++;
+            }
+            else {
+                index++;
+            }
+            if (x > 4) {
+                x = 0;
+            }
+            setTimeout(() => typeWriter(n), 100);
+        }
+        typeWriter(name);
+    </script>
+</body>
+
+</html>
