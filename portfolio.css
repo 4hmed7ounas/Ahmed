@@ -413,6 +413,10 @@ opacity: 0.7;
     text-shadow: 5px 7px 10px rgb(42, 8, 47);
 }
 
+.edu-style{
+    padding-left: 50px;
+}
+
 @media (max-width: 700px) {
     .offcanvas.offcanvas-end {
         width: 40%;
@@ -430,4 +434,7 @@ opacity: 0.7;
     .heading{
     font-size: 35px;
     }
+    .edu-style{
+    padding-left: 0px;
+}
 }
